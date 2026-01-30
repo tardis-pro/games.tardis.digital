@@ -10,11 +10,17 @@ import {
   UnauthorizedError,
   NotFoundError,
   ValidationError,
+  ForbiddenError,
+  ConflictError,
 } from '@player-platform-suite/errors';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
+import Redis from 'ioredis';
 
 const appLogger = createRootLogger('auth-service');
+
+const RATE_LIMIT_REQUESTS = 100;
+const RATE_LIMIT_WINDOW = 60;
 
 interface SteamTicketResponse {
   response: {
@@ -123,6 +129,18 @@ async function generateRefreshToken(userId: string): Promise<{ tokenId: string; 
 async function main(): Promise<void> {
   const cfg = loadConfig();
   const app = new Hono();
+  const redis = new Redis(cfg.redis.url);
+
+  async function checkRateLimit(ip: string): Promise<boolean> {
+    const key = `ratelimit:auth:${ip}`;
+    const current = await redis.incr(key);
+
+    if (current === 1) {
+      await redis.expire(key, RATE_LIMIT_WINDOW);
+    }
+
+    return current <= RATE_LIMIT_REQUESTS;
+  }
 
   app.use(requestId());
   app.use(logger());
@@ -133,6 +151,25 @@ async function main(): Promise<void> {
       allowHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
     })
   );
+
+  app.use('*', async (c, next) => {
+    const ip = c.req.header('X-Forwarded-For') || c.req.header('CF-Connecting-IP') || 'unknown';
+
+    if (!(await checkRateLimit(ip))) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please try again later.',
+          },
+        },
+        429
+      );
+    }
+
+    await next();
+  });
 
   app.get('/health', (c) => {
     return c.json({
@@ -347,6 +384,332 @@ async function main(): Promise<void> {
       }
       throw error;
     }
+  });
+
+  app.post('/api/v1/auth/revoke', async (c) => {
+    const body = await c.req.json<{ refreshToken: string }>();
+
+    if (!body.refreshToken) {
+      throw new ValidationError('refreshToken is required');
+    }
+
+    try {
+      const decoded = jwt.verify(body.refreshToken, config.auth.jwt.refreshTokenSecret, {
+        issuer: config.auth.jwt.issuer,
+        audience: config.auth.jwt.audience,
+      }) as { sub: string; type: string; tokenId: string };
+
+      if (decoded.type !== 'refresh') {
+        throw new UnauthorizedError('Invalid token type');
+      }
+
+      await redis.setex(`revoked:${decoded.tokenId}`, 86400, 'true');
+
+      return c.json({
+        success: true,
+        message: 'Token revoked successfully',
+      });
+    } catch (error) {
+      if (error instanceof jwt.JsonWebTokenError) {
+        throw new UnauthorizedError('Invalid refresh token');
+      }
+      throw error;
+    }
+  });
+
+  app.post('/api/v1/auth/logout', async (c) => {
+    const userId = c.get('userId');
+
+    await redis.keys(`revoked:${userId}:*`).then((keys) => {
+      if (keys.length > 0) {
+        redis.del(...keys);
+      }
+    });
+
+    return c.json({
+      success: true,
+      message: 'Logged out successfully',
+    });
+  });
+
+  app.get('/api/v1/auth/me', async (c) => {
+    const userId = c.get('userId');
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        identities: true,
+        progressions: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        id: user.id,
+        canonicalId: user.canonicalId,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        bio: user.bio,
+        roles: user.roles,
+        identities: user.identities.map((i) => ({
+          provider: i.provider,
+          providerId: i.providerId,
+        })),
+        progression: user.progressions[0] || null,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+    });
+  });
+
+  app.put('/api/v1/auth/profile', async (c) => {
+    const userId = c.get('userId');
+    const body = await c.req.json<{
+      displayName?: string;
+      avatarUrl?: string;
+      bio?: string;
+    }>();
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        displayName: body.displayName,
+        avatarUrl: body.avatarUrl,
+        bio: body.bio,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'UPDATE',
+        resourceType: 'user',
+        resourceId: userId,
+        newValue: { displayName: body.displayName, avatarUrl: body.avatarUrl, bio: body.bio },
+      },
+    });
+
+    return c.json({
+      success: true,
+      data: user,
+    });
+  });
+
+  app.post('/api/v1/auth/link/steam', async (c) => {
+    const userId = c.get('userId');
+    const body = await c.req.json<{ steamId: string; ticket: string }>();
+
+    if (!body.steamId || !body.ticket) {
+      throw new ValidationError('steamId and ticket are required');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { identities: true },
+    });
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    if (user.identities.some((i) => i.provider === 'STEAM')) {
+      throw new ConflictError('Steam account already linked');
+    }
+
+    const steamResponse = await verifySteamTicket(body.ticket, body.steamId);
+
+    if (!steamResponse.response?.authenticated) {
+      throw new UnauthorizedError('Steam authentication failed');
+    }
+
+    const existingSteamIdentity = await prisma.identity.findUnique({
+      where: {
+        provider_providerId: {
+          provider: 'STEAM',
+          providerId: body.steamId,
+        },
+      },
+    });
+
+    if (existingSteamIdentity) {
+      throw new ConflictError('Steam account already linked to another user');
+    }
+
+    await prisma.identity.create({
+      data: {
+        userId,
+        provider: 'STEAM',
+        providerId: body.steamId,
+      },
+    });
+
+    await prisma.accountLink.create({
+      data: {
+        userId,
+        provider: 'STEAM',
+        providerId: body.steamId,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'CREATE',
+        resourceType: 'identity',
+        newValue: { provider: 'STEAM', providerId: body.steamId },
+      },
+    });
+
+    return c.json({
+      success: true,
+      message: 'Steam account linked successfully',
+    });
+  });
+
+  app.post('/api/v1/auth/link/epic', async (c) => {
+    const userId = c.get('userId');
+    const body = await c.req.json<{ epicToken: string; epicId: string }>();
+
+    if (!body.epicToken || !body.epicId) {
+      throw new ValidationError('epicToken and epicId are required');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { identities: true },
+    });
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    if (user.identities.some((i) => i.provider === 'EPIC')) {
+      throw new ConflictError('Epic account already linked');
+    }
+
+    await verifyEpicToken(body.epicToken);
+
+    const existingEpicIdentity = await prisma.identity.findUnique({
+      where: {
+        provider_providerId: {
+          provider: 'EPIC',
+          providerId: body.epicId,
+        },
+      },
+    });
+
+    if (existingEpicIdentity) {
+      throw new ConflictError('Epic account already linked to another user');
+    }
+
+    await prisma.identity.create({
+      data: {
+        userId,
+        provider: 'EPIC',
+        providerId: body.epicId,
+      },
+    });
+
+    await prisma.accountLink.create({
+      data: {
+        userId,
+        provider: 'EPIC',
+        providerId: body.epicId,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'CREATE',
+        resourceType: 'identity',
+        newValue: { provider: 'EPIC', providerId: body.epicId },
+      },
+    });
+
+    return c.json({
+      success: true,
+      message: 'Epic account linked successfully',
+    });
+  });
+
+  app.delete('/api/v1/auth/unlink/:provider', async (c) => {
+    const userId = c.get('userId');
+    const provider = c.req.param('provider').toUpperCase();
+
+    if (provider !== 'STEAM' && provider !== 'EPIC') {
+      throw new ValidationError('Invalid provider');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { identities: true },
+    });
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    const linkedProviders = user.identities.filter((i) => i.provider === provider);
+
+    if (linkedProviders.length === 0) {
+      throw new NotFoundError(`${provider} account not linked`);
+    }
+
+    if (user.identities.length === 1) {
+      throw new ForbiddenError('Cannot unlink last authentication method');
+    }
+
+    await prisma.identity.deleteMany({
+      where: {
+        userId,
+        provider: provider as 'STEAM' | 'EPIC',
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'DELETE',
+        resourceType: 'identity',
+        newValue: { provider, unlinked: true },
+      },
+    });
+
+    return c.json({
+      success: true,
+      message: `${provider} account unlinked successfully`,
+    });
+  });
+
+  app.get('/api/v1/auth/linked-accounts', async (c) => {
+    const userId = c.get('userId');
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { identities: true },
+    });
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        linkedAccounts: user.identities.map((i) => ({
+          provider: i.provider,
+          providerId: i.providerId,
+          linkedAt: i.createdAt,
+        })),
+        canUnlink: user.identities.length > 1,
+      },
+    });
   });
 
   const port = 4001;
