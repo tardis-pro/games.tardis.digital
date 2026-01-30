@@ -150,7 +150,7 @@ jobs:
                 <p>Authentication • Progression • Leaderboards • Messaging • Commerce • UGC • Admin</p>
               </div>
             </div>
-            <redoc scroll-y-offset="120" theme='{"colors":{"primary":{"main":"#667eea"}},"typography":{"fontFamily":"Roboto, sans-serif","headings":{"fontFamily":"Montserrat, sans-serif"}}}'></redoc>
+            <redoc scroll-y-offset="120" spec-url='swagger.json' theme='{"colors":{"primary":{"main":"#667eea"}},"typography":{"fontFamily":"Roboto, sans-serif","headings":{"fontFamily":"Montserrat, sans-serif"}}}'></redoc>
             <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js"></script>
           </body>
           </html>
