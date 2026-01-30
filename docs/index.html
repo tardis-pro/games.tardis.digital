@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Player Platform Suite API Documentation</title>
+  <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,600,700|Roboto:300,400,500,700" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; font-family: 'Roboto', sans-serif; }
+    
+    .api-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 32px 40px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .api-header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 600;
+      font-family: 'Montserrat', sans-serif;
+    }
+    .api-header p {
+      margin: 6px 0 0 0;
+      opacity: 0.92;
+      font-size: 14px;
+      font-weight: 300;
+    }
+    .api-logo {
+      width: 64px;
+      height: 64px;
+      background: white;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #667eea;
+      font-size: 24px;
+      font-family: 'Montserrat', sans-serif;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .api-content {
+      max-width: 100%;
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.css">
+</head>
+<body>
+  <div class="api-header">
+    <div class="api-logo">PP</div>
+    <div>
+      <h1>Player Platform Suite API</h1>
+      <p>Authentication • Progression • Leaderboards • Messaging • Commerce • UGC • Admin</p>
+    </div>
+  </div>
+  <div class="api-content">
+    <redoc scroll-y-offset="120" theme='{"colors":{"primary":{"main":"#667eea"}},"typography":{"fontFamily":"Roboto, sans-serif","headings":{"fontFamily":"Montserrat, sans-serif"}}}'></redoc>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js"></script>
+</body>
+</html>
