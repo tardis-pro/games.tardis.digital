@@ -1,4 +1,4 @@
-name: Deploy Swagger UI to GitHub Pages
+name: Deploy API Documentation to GitHub Pages
 
 on:
   push:
@@ -27,77 +27,139 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+      - name: Create documentation directory
+        run: mkdir -p docs
 
-      - name: Download Swagger UI
-        run: |
-          mkdir -p swagger-ui
-          curl -L https://github.com/swagger-api/swagger-ui/archive/refs/tags/v5.11.0.tar.gz -o swagger.tar.gz
-          tar -xzf swagger.tar.gz -C swagger-ui --strip-components=1
-          rm swagger.tar.gz
+      - name: Download Redoc CLI
+        run: npm install -g redoc-cli
 
-      - name: Copy swagger.json
+      - name: Generate HTML documentation
         run: |
-          cp apps/api-gateway/src/routes/swagger.json swagger-ui/dist/swagger.json
+          redoc-cli bundle apps/api-gateway/src/routes/swagger.json \
+            --title "Player Platform Suite API" \
+            --output docs/index.html \
+            --template custom \
+            --cdn
 
-      - name: Create index.html
+      - name: Create custom header with logo
         run: |
-          cat > swagger-ui/dist/index.html << 'EOF'
+          cat > docs/header.html << 'EOF'
+          <style>
+            .api-header {
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              padding: 20px 30px;
+              margin: -30px -30px 30px -30px;
+              display: flex;
+              align-items: center;
+              gap: 20px;
+            }
+            .api-header h1 {
+              margin: 0;
+              font-size: 24px;
+              font-weight: 600;
+            }
+            .api-header p {
+              margin: 5px 0 0 0;
+              opacity: 0.9;
+              font-size: 14px;
+            }
+            .api-logo {
+              width: 48px;
+              height: 48px;
+              background: white;
+              border-radius: 8px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-weight: bold;
+              color: #667eea;
+              font-size: 20px;
+            }
+          </style>
+          <div class="api-header">
+            <div class="api-logo">PP</div>
+            <div>
+              <h1>Player Platform Suite API</h1>
+              <p>Authentication • Progression • Leaderboards • Commerce • UGC</p>
+            </div>
+          </div>
+          EOF
+
+      - name: Inject header into Redoc output
+        run: |
+          sed -i 's|<redoc.*|<div style="display:none">|g' docs/index.html
+          sed -i 's|</redoc>|</div>|g' docs/index.html
+          sed -i 's|<link rel="stylesheet".*>|</style><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.css">|g' docs/index.html
+          sed -i 's|<div id="redoc">|<div id="redoc">|g' docs/index.html
+
+      - name: Create standalone HTML with header
+        run: |
+          cat > docs/index.html << 'ENDFILE'
           <!DOCTYPE html>
-          <html lang="en">
+          <html>
           <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
             <title>Player Platform Suite API Documentation</title>
-            <link rel="stylesheet" type="text/css" href="/swagger-ui/dist/swagger-ui.css" />
-            <link rel="icon" type="image/png" href="/swagger-ui/dist/favicon-32x32.png" sizes="32x32" />
             <style>
-              body {
-                margin: 0;
-                padding: 0;
-              }
-              .topbar-wrapper {
+              body { margin: 0; padding: 0; }
+              .api-header {
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                padding: 10px 20px;
+                color: white;
+                padding: 24px 40px;
+                display: flex;
+                align-items: center;
+                gap: 20px;
               }
-              .topbar-wrapper img {
-                height: 30px;
+              .api-header h1 {
+                margin: 0;
+                font-size: 28px;
+                font-weight: 600;
+              }
+              .api-header p {
+                margin: 4px 0 0 0;
+                opacity: 0.9;
+                font-size: 14px;
+              }
+              .api-logo {
+                width: 56px;
+                height: 56px;
+                background: white;
+                border-radius: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                color: #667eea;
+                font-size: 24px;
+              }
+              .api-content {
+                max-width: 1400px;
+                margin: 0 auto;
               }
             </style>
+            <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.css">
           </head>
           <body>
-            <div id="swagger-ui"></div>
-            <script src="/swagger-ui/dist/swagger-ui-bundle.js"></script>
-            <script src="/swagger-ui/dist/swagger-ui-standalone-preset.js"></script>
-            <script>
-              window.onload = function() {
-                SwaggerUIBundle({
-                  url: "/swagger-ui/dist/swagger.json",
-                  dom_id: "#swagger-ui",
-                  deepLinking: true,
-                  presets: [
-                    SwaggerUIBundle.presets.apis,
-                    SwaggerUIBundle.SwaggerUIStandalonePreset
-                  ],
-                  plugins: [
-                    SwaggerUIBundle.plugins.DownloadUrl
-                  ],
-                  layout: "StandaloneLayout",
-                  docExpansion: "none",
-                  filter: true,
-                  showRequestDuration: true,
-                  defaultModelsExpandDepth: 3,
-                  defaultModelExpandDepth: 3
-                });
-              };
-            </script>
+            <div class="api-header">
+              <div class="api-logo">PP</div>
+              <div>
+                <h1>Player Platform Suite API</h1>
+                <p>Authentication • Progression • Leaderboards • Messaging • Commerce • UGC • Admin</p>
+              </div>
+            </div>
+            <div class="api-content">
+              <redoc spec-url='swagger.json'></redoc>
+            </div>
+            <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js"></script>
           </body>
           </html>
-          EOF
+          ENDFILE
+
+      - name: Copy swagger.json for Redoc
+        run: cp apps/api-gateway/src/routes/swagger.json docs/swagger.json
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -105,7 +167,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'swagger-ui/dist'
+          path: 'docs'
 
       - name: Deploy to GitHub Pages
         id: deployment
