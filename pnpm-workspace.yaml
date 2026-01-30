@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+catalog:
+  nodejs:
+    version: 20.x
+    engine: node
+
+resolver:
+  enable-pre-post-scripts: true

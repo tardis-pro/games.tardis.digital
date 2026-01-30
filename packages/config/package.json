@@ -1,0 +1,17 @@
+{
+  "name": "@player-platform-suite/config",
+  "version": "1.0.0",
+  "description": "Shared configuration for the Player Platform Suite",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}
