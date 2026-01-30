@@ -1,0 +1,86 @@
+lockfileVersion: '6.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+dependencies:
+  '@hono/node-server':
+    version: ^1.3.0
+    resolution: '@hono/node-server@1.3.0'
+  '@prisma/client':
+    version: ^5.7.0
+    resolution: '@prisma/client@5.7.0'
+  hono:
+    version: ^3.10.0
+    resolution: 'hono@3.10.0'
+  ioredis:
+    version: ^5.3.0
+    resolution: 'ioredis@5.3.0'
+  jsonwebtoken:
+    version: ^9.0.0
+    resolution: 'jsonwebtoken@9.0.0'
+  pino:
+    version: ^8.17.0
+    resolution: 'pino@8.17.0'
+  zod:
+    version: ^3.22.0
+    resolution: 'zod@3.22.0'
+
+devDependencies:
+  '@types/jsonwebtoken':
+    version: ^9.0.0
+    resolution: '@types/jsonwebtoken@9.0.0'
+  '@types/node':
+    version: ^20.10.0
+    resolution: '@types/node@20.10.0'
+  eslint:
+    version: ^8.55.0
+    resolution: 'eslint@8.55.0'
+  prettier:
+    version: ^3.1.0
+    resolution: 'prettier@3.1.0'
+  prisma:
+    version: ^5.7.0
+    resolution: 'prisma@5.7.0'
+  ts-node:
+    version: ^10.9.2
+    resolution: 'ts-node@10.9.2'
+  turbo:
+    version: ^1.11.0
+    resolution: 'turbo@1.11.0'
+  typescript:
+    version: ^5.3.0
+    resolution: 'typescript@5.3.0'
+
+packages:
+  '':
+    engines:
+      node: '>=20.0.0'
+      pnpm: '>=8.10.0'
+    resolution: 'player-platform-suite@1.0.0'
+
+  node_modules/@prisma/client@5.7.0:
+    resolution: { integrity: sha512-luKfhYdE8owZfbWLKfE5pLIOT7RK0Z+0q+V1t/JBDmXZI7ghM1xG8HEVR8wGE0B/MemRMakW+pYhlR8w5Q9V0QA== }
+    engines: { node: '>=18.18' }
+    hasBin: true
+
+  node_modules/hono@3.10.0:
+    resolution: { integrity: sha512-fGm4q9V17WcjNK7V1vVuKjItC7q1v0L1KjLnY7O2kjX4Z8ljnw7K7uO1FzqR+e2cKXXtKiS5P4q0XjqKcS7tw== }
+    engines: { node: '>=18.0.0' }
+    hasBin: true
+
+  node_modules/ioredis@5.3.0:
+    resolution: { integrity: sha512-1cYvqqBMckJ7SqT3DmqJ4D7kqD34C9C4bHgBD7F0D3AQXjO7u5TC3xCS1lLpYpyMYCV9s2/9vvhLOvqOA/cAw== }
+    engines: { node: '>=10' }
+    hasBin: true
+
+  node_modules/jsonwebtoken@9.0.0:
+    resolution: { integrity: sha512-uDUDD7bC1aazv7v+2+3GzZ0xK6juH3vxfJ5Jq8hfhPQzC1H3cGLXK3D1nr8g2j55IobZx+1A8K4k9w+9Q8A== }
+    engines: { node: '>=12' }
+    hasBin: true
+
+  node_modules/zod@3.22.0:
+    resolution: { integrity: sha512-y5B56fIhhJ2IU8WVA5d2W2Ry2vq4p2T/p2kzC5XgV7wNPFT/c7dUv8d8H5O4Y3b5dZ7IVrNNdlT2QvJlT6w== }
+    engines: { node: '>=8' }
+    hasBin: true
