@@ -1,0 +1,53 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "build/**"],
+      "cache": true,
+    },
+    "build:tsc": {
+      "dependsOn": ["^build:tsc"],
+      "outputs": ["dist/**"],
+      "cache": true,
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+    },
+    "lint": {
+      "outputs": [],
+      "cache": true,
+    },
+    "lint:fix": {
+      "outputs": [],
+      "cache": true,
+    },
+    "test": {
+      "outputs": ["coverage/**"],
+      "cache": true,
+    },
+    "test:coverage": {
+      "outputs": ["coverage/**"],
+      "cache": true,
+    },
+    "db:migrate": {
+      "outputs": [],
+      "cache": false,
+    },
+    "db:generate": {
+      "outputs": [],
+      "cache": false,
+    },
+    "db:studio": {
+      "cache": false,
+      "persistent": true,
+    },
+    "typecheck": {
+      "outputs": [],
+      "cache": true,
+    },
+  },
+  "globalDependencies": [".env*"],
+  "globalDotEnv": [".env"],
+}

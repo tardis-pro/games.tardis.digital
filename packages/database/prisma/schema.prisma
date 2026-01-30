@@ -1,0 +1,407 @@
+// Prisma Schema for Player Platform Suite
+// Sprint 1: Core data models
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// Core Enums
+// ============================================================================
+
+enum Provider {
+  STEAM
+  EPIC
+}
+
+enum UserRole {
+  PLAYER
+  MODERATOR
+  ADMIN
+}
+
+enum AuditAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+}
+
+// ============================================================================
+// User & Identity Models
+// ============================================================================
+
+model User {
+  id             String   @id @default(uuid())
+  canonicalId    String   @unique @db.VarChar(64)
+  displayName    String   @db.VarChar(128)
+  avatarUrl      String?  @db.VarChar(512)
+  bio            String?  @db.VarChar(1000)
+  roles          UserRole[] @default([PLAYER])
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  identities     Identity[]
+  accountLinks   AccountLink[]
+  progressions   PlayerProgression[]
+  entitlements   Entitlement[]
+  orders         Order[]
+  messages       Message[]        @relation("RecipientMessages")
+  supportThreads SupportThread[]
+  ugcItems       UGCItem[]
+  ratings        UGCItemRating[]
+  reports        UGCReport[]
+  auditLogs      AuditLog[]
+
+  @@index([canonicalId])
+  @@map("users")
+}
+
+model Identity {
+  id           String   @id @default(uuid())
+  userId       String
+  provider     Provider
+  providerId   String   @db.VarChar(128)
+  accessToken  String?  @db.Text
+  refreshToken String?  @db.Text
+  expiresAt    DateTime?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@map("identities")
+}
+
+model AccountLink {
+  id              String   @id @default(uuid())
+  userId          String
+  provider        Provider
+  providerId      String   @db.VarChar(128)
+  linkedAt        DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@map("account_links")
+}
+
+// ============================================================================
+// Progression Models
+// ============================================================================
+
+model PlayerProgression {
+  id          String   @id @default(uuid())
+  userId      String
+  version     Int      @default(1)
+  displayName String   @db.VarChar(128)
+  avatarUrl   String?  @db.VarChar(512)
+  bio         String?  @db.VarChar(1000)
+  level       Int      @default(1)
+  xp          Int      @default(0)
+  achievements Json    @default("[]")
+  currency    Json     @default("{}")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+  @@map("player_progressions")
+}
+
+// ============================================================================
+// Leaderboard Models
+// ============================================================================
+
+model LeaderboardSeason {
+  id          String   @id @default(uuid())
+  name        String   @db.VarChar(128)
+  description String?  @db.VarChar(512)
+  type        String   @default("global") // global, regional, friends
+  isActive    Boolean  @default(false)
+  startsAt    DateTime
+  endsAt      DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entries     LeaderboardEntry[]
+
+  @@map("leaderboard_seasons")
+}
+
+model LeaderboardEntry {
+  id          String   @id @default(uuid())
+  seasonId    String
+  userId      String
+  score       BigInt   @default(0)
+  rank        Int?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  season      LeaderboardSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  @@unique([seasonId, userId])
+  @@map("leaderboard_entries")
+}
+
+// ============================================================================
+// Messaging Models
+// ============================================================================
+
+model Message {
+  id          String   @id @default(uuid())
+  recipientId String
+  senderId    String?
+  type        String   @db.VarChar(64)
+  subject     String?  @db.VarChar(256)
+  body        String   @db.Text
+  metadata    Json?
+  isRead      Boolean  @default(false)
+  isArchived  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  recipient   User     @relation("RecipientMessages", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, isRead])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+model SupportThread {
+  id          String   @id @default(uuid())
+  userId      String
+  subject     String   @db.VarChar(256)
+  status      String   @default("open") // open, pending, resolved, closed
+  priority    String   @default("normal") // low, normal, high, urgent
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  resolvedAt  DateTime?
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    SupportMessage[]
+
+  @@index([userId])
+  @@map("support_threads")
+}
+
+model SupportMessage {
+  id          String   @id @default(uuid())
+  threadId    String
+  senderId    String
+  senderType  String   @default("player") // player, support, admin
+  body        String   @db.Text
+  attachments Json?
+  createdAt   DateTime @default(now())
+
+  thread      SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
+  @@map("support_messages")
+}
+
+// ============================================================================
+// Commerce Models
+// ============================================================================
+
+model SKU {
+  id          String   @id @default(uuid())
+  name        String   @db.VarChar(128)
+  description String?  @db.VarChar(512)
+  type        String   // durable, consumable, subscription
+  category    String   @db.VarChar(64)
+  price       Decimal  @db.Decimal(10, 2)
+  currency    String   @default("USD")
+  metadata    Json?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entitlements Entitlement[]
+  orderItems  OrderItem[]
+
+  @@map("skus")
+}
+
+model Order {
+  id              String   @id @default(uuid())
+  userId          String
+  provider        Provider
+  providerOrderId String   @db.VarChar(128)
+  status          String   @default("pending") // pending, verified, failed, refunded
+  totalAmount     Decimal  @db.Decimal(10, 2)
+  currency        String   @default("USD")
+  idempotencyKey  String?  @unique @db.VarChar(128)
+  metadata        Json?
+  verifiedAt      DateTime?
+  refundedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items           OrderItem[]
+  entitlements    Entitlement[]
+
+  @@unique([provider, providerOrderId])
+  @@index([userId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  skuId     String
+  quantity  Int      @default(1)
+  unitPrice Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sku       SKU      @relation(fields: [skuId], references: [id])
+
+  @@map("order_items")
+}
+
+model Entitlement {
+  id            String   @id @default(uuid())
+  userId        String
+  skuId         String
+  orderId       String?
+  status        String   @default("active") // active, revoked, expired
+  grantedAt     DateTime @default(now())
+  revokedAt     DateTime?
+  revocationReason String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sku           SKU      @relation(fields: [skuId], references: [id])
+  order         Order?   @relation(fields: [orderId], references: [id])
+  ledgerEntries LedgerEntry[]
+
+  @@index([userId])
+  @@index([skuId])
+  @@map("entitlements")
+}
+
+model LedgerEntry {
+  id              String   @id @default(uuid())
+  entitlementId   String?
+  userId          String
+  skuId           String
+  changeType      String   // grant, spend, clawback, adjustment
+  quantity        Int
+  balanceAfter    Int
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  entitlement     Entitlement? @relation(fields: [entitlementId], references: [id], onDelete: Cascade)
+
+  @@index([entitlementId])
+  @@index([userId])
+  @@map("ledger_entries")
+}
+
+// ============================================================================
+// UGC Models
+// ============================================================================
+
+model UGCItem {
+  id           String   @id @default(uuid())
+  creatorId    String
+  type         String   // mod, image, video, map, text
+  name         String   @db.VarChar(256)
+  description  String?  @db.VarChar(2000)
+  tags         String[] @default([])
+  status       String   @default("draft") // draft, scanning, pending_review, published, flagged, removed
+  visibility   String   @default("public") // public, private, friends_only
+  storagePath  String   @db.VarChar(512)
+  checksum     String   @db.VarChar(128)
+  fileSize     BigInt
+  contentType  String   @db.VarChar(128)
+  metadata     Json?
+  downloadCount Int     @default(0)
+  ratingSum    Int      @default(0)
+  ratingCount  Int      @default(0)
+  flaggedReason String?
+  moderationNotes String?
+  publishedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  creator      User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  ratings      UGCItemRating[]
+  reports      UGCReport[]
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([type])
+  @@map("ugc_items")
+}
+
+model UGCItemRating {
+  id        String   @id @default(uuid())
+  ugcId     String
+  userId    String
+  rating    Int      // 1-5 stars or thumbs up/down
+  createdAt DateTime @default(now())
+
+  ugc       UGCItem  @relation(fields: [ugcId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([ugcId, userId])
+  @@map("ugc_item_ratings")
+}
+
+model UGCReport {
+  id          String   @id @default(uuid())
+  ugcId       String
+  reporterId  String
+  reason      String   @db.VarChar(64)
+  description String?  @db.Text
+  status      String   @default("pending") // pending, reviewed, dismissed, upheld
+  createdAt   DateTime @default(now())
+  reviewedAt  DateTime?
+
+  ugc         UGCItem  @relation(fields: [ugcId], references: [id], onDelete: Cascade)
+  reporter    User     @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([ugcId])
+  @@map("ugc_reports")
+}
+
+// ============================================================================
+// Audit Log
+// ============================================================================
+
+model AuditLog {
+  id           String      @id @default(uuid())
+  userId       String?
+  action       AuditAction
+  resourceType String      @db.VarChar(64)
+  resourceId   String?     @db.VarChar(128)
+  oldValue     Json?
+  newValue     Json?
+  ipAddress    String?     @db.VarChar(45)
+  userAgent    String?     @db.VarChar(512)
+  metadata     Json?
+  createdAt    DateTime    @default(now())
+
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

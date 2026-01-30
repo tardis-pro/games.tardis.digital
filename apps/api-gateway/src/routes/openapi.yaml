@@ -1,0 +1,567 @@
+openapi: 3.1.0
+info:
+  title: Player Platform Suite API
+  description: |
+    A comprehensive gaming platform API providing authentication, progression tracking,
+    leaderboards, messaging, commerce, and user-generated content management.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@player-platform.example.com
+
+servers:
+  - url: http://localhost:4000
+    description: Development server
+  - url: https://api.player-platform.example.com
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: Steam and Epic authentication endpoints
+  - name: Progression
+    description: Player progression save/load
+  - name: Leaderboards
+    description: Leaderboard and ranking endpoints
+  - name: Messaging
+    description: System notifications and support threads
+  - name: Commerce
+    description: SKU catalog and entitlements
+  - name: UGC
+    description: User-generated content upload and discovery
+  - name: Admin
+    description: Administrative endpoints
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      tags: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                  version:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /ready:
+    get:
+      summary: Readiness check endpoint
+      tags: []
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  checks:
+                    type: object
+                    properties:
+                      database:
+                        type: boolean
+                      redis:
+                        type: boolean
+
+  # Authentication
+  /api/v1/auth/steam/login:
+    post:
+      summary: Authenticate with Steam
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - steamId
+                - ticket
+              properties:
+                steamId:
+                  type: string
+                  description: Steam user ID
+                ticket:
+                  type: string
+                  description: Steam authentication ticket
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /api/v1/auth/epic/login:
+    post:
+      summary: Authenticate with Epic Games
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - epicToken
+                - epicId
+              properties:
+                epicToken:
+                  type: string
+                  description: Epic Games authentication token
+                epicId:
+                  type: string
+                  description: Epic Games account ID
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /api/v1/auth/refresh:
+    post:
+      summary: Refresh access token
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  # Progression
+  /api/v1/progression/{userId}:
+    get:
+      summary: Get player progression
+      tags:
+        - Progression
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Progression data retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Progression'
+        '404':
+          description: Progression not found
+
+    post:
+      summary: Save player progression
+      tags:
+        - Progression
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgressionUpdate'
+      responses:
+        '200':
+          description: Progression saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Progression'
+        '409':
+          description: Version conflict
+
+  # Leaderboards
+  /api/v1/leaderboards:
+    get:
+      summary: List all leaderboard seasons
+      tags:
+        - Leaderboards
+      responses:
+        '200':
+          description: Leaderboard seasons retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LeaderboardSeason'
+
+    post:
+      summary: Create a new leaderboard season
+      tags:
+        - Leaderboards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeaderboardSeasonCreate'
+      responses:
+        '201':
+          description: Leaderboard season created
+
+  /api/v1/leaderboards/{seasonId}/top:
+    get:
+      summary: Get top players on a leaderboard
+      tags:
+        - Leaderboards
+      parameters:
+        - name: seasonId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Top players retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LeaderboardEntry'
+
+  # Commerce
+  /api/v1/skus:
+    get:
+      summary: List all SKUs
+      tags:
+        - Commerce
+      responses:
+        '200':
+          description: SKUs retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SKU'
+
+  /api/v1/entitlements:
+    get:
+      summary: Get player entitlements
+      tags:
+        - Commerce
+      responses:
+        '200':
+          description: Entitlements retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Entitlement'
+
+  # UGC
+  /api/v1/ugc:
+    get:
+      summary: List player's UGC items
+      tags:
+        - UGC
+      responses:
+        '200':
+          description: UGC items retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUGC'
+
+  /api/v1/ugc/discovery:
+    get:
+      summary: Discover UGC content
+      tags:
+        - UGC
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [mod, image, video, map, text]
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [newest, trending, top_rated]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Discovery results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUGC'
+
+components:
+  schemas:
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User'
+            tokens:
+              $ref: '#/components/schemas/AuthTokens'
+
+    AuthTokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+        tokenType:
+          type: string
+          enum: [Bearer]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        canonicalId:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [PLAYER, MODERATOR, ADMIN]
+
+    Progression:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        version:
+          type: integer
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+        bio:
+          type: string
+        level:
+          type: integer
+        xp:
+          type: integer
+        achievements:
+          type: array
+          items:
+            type: string
+        currency:
+          type: object
+          additionalProperties:
+            type: integer
+
+    ProgressionUpdate:
+      type: object
+      properties:
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+        bio:
+          type: string
+        level:
+          type: integer
+        xp:
+          type: integer
+        achievements:
+          type: array
+          items:
+            type: string
+        currency:
+          type: object
+        expectedVersion:
+          type: integer
+
+    LeaderboardSeason:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [global, regional, friends]
+        isActive:
+          type: boolean
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+
+    LeaderboardSeasonCreate:
+      type: object
+      required:
+        - name
+        - type
+        - startsAt
+        - endsAt
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [global, regional, friends]
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+        userId:
+          type: string
+        score:
+          type: number
+
+    SKU:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [durable, consumable, subscription]
+        category:
+          type: string
+        price:
+          type: number
+        currency:
+          type: string
+        isActive:
+          type: boolean
+
+    Entitlement:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        skuId:
+          type: string
+        status:
+          type: string
+          enum: [active, revoked, expired]
+        grantedAt:
+          type: string
+          format: date-time
+
+    UGCItem:
+      type: object
+      properties:
+        id:
+          type: string
+        creatorId:
+          type: string
+        type:
+          type: string
+          enum: [mod, image, video, map, text]
+        name:
+          type: string
+        description:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [draft, scanning, pending_review, published, flagged, removed]
+        downloadCount:
+          type: integer
+        ratingSum:
+          type: integer
+        ratingCount:
+          type: integer
+
+    PaginatedUGC:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UGCItem'
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalPages:
+          type: integer
